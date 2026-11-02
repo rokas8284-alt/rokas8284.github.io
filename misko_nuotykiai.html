@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Miško nuotykiai</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #163b2b; color: #fff;
+    font-family: Arial, sans-serif; display: grid; place-items: center;
+    min-height: 100vh; padding: 18px;
+  }
+  .game { width: min(900px, 100%); text-align: center; }
+  h1 { margin: 0 0 8px; }
+  p { margin: 6px 0 12px; }
+  .hud {
+    display: flex; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; background: #24563d; padding: 10px 14px;
+    border-radius: 12px; margin-bottom: 10px;
+  }
+  canvas {
+    width: 100%; max-width: 850px; aspect-ratio: 16 / 9;
+    background: #8ccf76; border: 5px solid #d5edb5;
+    border-radius: 14px; display: block; margin: auto;
+  }
+  button {
+    margin-top: 12px; padding: 10px 18px; border: 0; border-radius: 10px;
+    background: #f5d66b; color: #243b24; font-weight: bold; cursor: pointer;
+  }
+  .help { font-size: 14px; opacity: .95; }
+</style>
+</head>
+<body>
+<div class="game">
+  <h1>🌲 Miško nuotykiai 🐿️</h1>
+  <p>Surink 8 giles ir tyrinėk mišką!</p>
+  <div class="hud">
+    <span id="score">🌰 Gilės: 0 / 8</span>
+    <span id="message">Sėkmės, miško tyrinėtojau!</span>
+  </div>
+  <canvas id="world" width="850" height="478" aria-label="Miško žaidimo laukas"></canvas>
+  <button id="restart">Pradėti iš naujo</button>
+  <p class="help">Valdymas: rodyklės arba WASD. Kompiuteryje taip pat gali naudoti tarpo klavišą pauzei.</p>
+</div>
+<script>
+(() => {
+  const canvas = document.getElementById("world");
+  const ctx = canvas.getContext("2d");
+  const scoreEl = document.getElementById("score");
+  const messageEl = document.getElementById("message");
+  const W = canvas.width, H = canvas.height;
+  const keys = {};
+  let player, acorns, trees, animals, collected, won, paused;
+
+  function random(min, max) { return Math.random() * (max - min) + min; }
+  function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+  function reset() {
+    player = { x: 75, y: H - 75, r: 15, speed: 3.2 };
+    collected = 0; won = false; paused = false;
+    acorns = [];
+    trees = [];
+    animals = [
+      { x: 160, y: 120, emoji: "🦊" },
+      { x: 690, y: 110, emoji: "🦌" },
+      { x: 430, y: 365, emoji: "🐇" }
+    ];
+    for (let i = 0; i < 8; i++) {
+      let item;
+      do {
+        item = { x: random(55, W - 55), y: random(55, H - 55), r: 12 };
+      } while (distance(item, player) < 75 || acorns.some(a => distance(a, item) < 55));
+      acorns.push(item);
+    }
+    for (let i = 0; i < 24; i++) {
+      trees.push({ x: random(25, W - 25), y: random(25, H - 25), s: random(.75, 1.2) });
+    }
+    updateHud();
+    draw();
+  }
+
+  function updateHud() {
+    scoreEl.textContent = `🌰 Gilės: ${collected} / 8`;
+    if (won) messageEl.textContent = "🏆 Puiku! Ištyrinėjai mišką!";
+    else if (paused) messageEl.textContent = "Pauzė";
+    else messageEl.textContent = "Rink giles ir saugok mišką!";
+  }
+
+  function drawTree(t) {
+    ctx.save(); ctx.translate(t.x, t.y); ctx.scale(t.s, t.s);
+    ctx.fillStyle = "#76502f"; ctx.fillRect(-5, 2, 10, 24);
+    ctx.fillStyle = "#1f713e";
+    ctx.beginPath(); ctx.arc(0, -7, 19, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#32934b";
+    ctx.beginPath(); ctx.arc(-9, -13, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#8ccf76"; ctx.fillRect(0, 0, W, H);
+    // Miško takelis
+    ctx.strokeStyle = "#d9c18a"; ctx.lineWidth = 75; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(0, 390); ctx.quadraticCurveTo(330, 280, 470, 330);
+    ctx.quadraticCurveTo(650, 390, 850, 245); ctx.stroke();
+    // Žolės kuokšteliai
+    ctx.strokeStyle = "#4f9c50"; ctx.lineWidth = 2;
+    for (let i = 0; i < 95; i++) {
+      const x = (i * 97) % W, y = (i * 53) % H;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 3, y - 7); ctx.moveTo(x, y); ctx.lineTo(x + 4, y - 8); ctx.stroke();
+    }
+    trees.forEach(drawTree);
+    animals.forEach(a => {
+      ctx.font = "30px Arial"; ctx.textAlign = "center"; ctx.fillText(a.emoji, a.x, a.y);
+    });
+    acorns.forEach(a => {
+      ctx.font = "25px Arial"; ctx.textAlign = "center"; ctx.fillText("🌰", a.x, a.y + 8);
+    });
+    // Žaidėjas
+    ctx.font = "30px Arial"; ctx.textAlign = "center";
+    ctx.fillText("🧑‍🌾", player.x, player.y + 10);
+    if (paused || won) {
+      ctx.fillStyle = "rgba(15,45,27,.65)"; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#fff"; ctx.font = "bold 34px Arial";
+      ctx.fillText(won ? "Tu tikras gamtos tyrinėtojas! 🌟" : "PAUZĖ", W / 2, H / 2);
+    }
+  }
+
+  function tick() {
+    if (!paused && !won) {
+      let dx = 0, dy = 0;
+      if (keys.ArrowLeft || keys.a) dx--;
+      if (keys.ArrowRight || keys.d) dx++;
+      if (keys.ArrowUp || keys.w) dy--;
+      if (keys.ArrowDown || keys.s) dy++;
+      if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
+      player.x = Math.max(18, Math.min(W - 18, player.x + dx * player.speed));
+      player.y = Math.max(18, Math.min(H - 18, player.y + dy * player.speed));
+      acorns = acorns.filter(a => {
+        if (distance(player, a) < 27) { collected++; return false; }
+        return true;
+      });
+      if (collected >= 8) won = true;
+      updateHud();
+    }
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  window.addEventListener("keydown", e => {
+    if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
+    keys[e.key] = true;
+    if (e.key === " ") { paused = !paused; updateHud(); }
+  });
+  window.addEventListener("keyup", e => { keys[e.key] = false; });
+  document.getElementById("restart").addEventListener("click", reset);
+  reset();
+  tick();
+})();
+</script>
+</body>
+</html>
